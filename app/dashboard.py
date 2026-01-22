@@ -1,62 +1,149 @@
-# dashboard_transporte.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np
 
-st.set_page_config(page_title="Dashboard de Mobilidade", layout="wide")
-st.title("Dashboard de Mobilidade - Transporte Público")
+# -----------------------------
+# Page configuration
+# -----------------------------
+st.set_page_config(page_title="IMDb Movies Dashboard", layout="wide")
+st.title("🎬 IMDb Movies Dashboard")
+st.markdown(
+    "Interactive dashboard for exploring IMDb movie ratings, genres and trends over time."
+)
 
-# --- Dados fictícios ---
-np.random.seed(42)
-estacoes = ["Trindade", "Campanhã", "Bolhão", "Aliados", "Casa da Música"]
-horas = list(range(6, 23))  # das 6h às 22h
+df = pd.read_csv("./data/imdb_top_1000.csv")
 
-data = []
-for est in estacoes:
-    for hora in horas:
-        passageiros = np.random.randint(50, 500)  # número fictício de passageiros
-        data.append({"estacao": est, "hora": hora, "passageiros": passageiros})
+# -----------------------------
+# Data preparation
+# -----------------------------
+# Rename columns for consistency (dataset-dependent, but common ones)
+df.columns = [c.lower().strip() for c in df.columns]
 
-df = pd.DataFrame(data)
+# Ensure numeric columns
+df["imdb_rating"] = pd.to_numeric(df["imdb_rating"], errors="coerce")
+df["released_year"] = pd.to_numeric(df["released_year"], errors="coerce")
+df["runtime"] = (
+    df["runtime"]
+    .str.replace(" min", "", regex=False)
+    .astype(float)
+)
 
-# --- Filtros ---
-st.sidebar.header("Filtros")
-estacao_selecionada = st.sidebar.selectbox("Escolhe a estação", estacoes)
-df_filtrado = df[df['estacao'] == estacao_selecionada]
+# Drop rows with essential missing values
+df = df.dropna(subset=["imdb_rating", "released_year", "genre"])
 
-# --- Gráfico de linha ---
-st.subheader(f"Passageiros por hora na estação {estacao_selecionada}")
-fig_linha = px.line(df_filtrado, x='hora', y='passageiros',
-                    labels={"hora": "Hora do dia", "passageiros": "Número de passageiros"},
-                    markers=True)
-st.plotly_chart(fig_linha, use_container_width=True)
+# Split genres (keep first genre for simplicity)
+df["main_genre"] = df["genre"].str.split(",").str[0]
 
-# --- Heatmap de todas as estações ---
-st.subheader("Comparação de todas as estações")
-fig_heatmap = px.density_heatmap(df, x='hora', y='estacao', z='passageiros',
-                                 color_continuous_scale='Viridis',
-                                 labels={"hora": "Hora do dia", "estacao": "Estação", "passageiros": "Passageiros"})
-st.plotly_chart(fig_heatmap, use_container_width=True)
+# -----------------------------
+# Sidebar filters
+# -----------------------------
+st.sidebar.header("Filters")
 
-# --- Mapa interativo (simulado) ---
-st.subheader("Mapa interativo das estações (simulado)")
-# Coordenadas fictícias
-coords = {
-    "Trindade": [41.147, -8.611],
-    "Campanhã": [41.157, -8.600],
-    "Bolhão": [41.145, -8.610],
-    "Aliados": [41.149, -8.610],
-    "Casa da Música": [41.160, -8.630]
-}
-map_data = pd.DataFrame({
-    "estacao": estacoes,
-    "lat": [coords[e][0] for e in estacoes],
-    "lon": [coords[e][1] for e in estacoes],
-    "passageiros": [df[df['estacao']==e]['passageiros'].sum() for e in estacoes]
-})
+genres = sorted(df["main_genre"].unique())
+selected_genres = st.sidebar.multiselect(
+    "Select genre(s)", genres, default=genres
+)
 
-fig_map = px.scatter_mapbox(map_data, lat="lat", lon="lon", size="passageiros",
-                            hover_name="estacao", color="passageiros", zoom=13,
-                            mapbox_style="open-street-map")
-st.plotly_chart(fig_map, use_container_width=True)
+year_min, year_max = int(df["released_year"].min()), int(df["released_year"].max())
+selected_years = st.sidebar.slider(
+    "Release year range", year_min, year_max, (year_min, year_max)
+)
+
+rating_min, rating_max = float(df["imdb_rating"].min()), float(df["imdb_rating"].max())
+selected_ratings = st.sidebar.slider(
+    "IMDb rating range", rating_min, rating_max, (rating_min, rating_max)
+)
+
+# Apply filters
+df_filtered = df[
+    (df["main_genre"].isin(selected_genres)) &
+    (df["released_year"].between(*selected_years)) &
+    (df["imdb_rating"].between(*selected_ratings))
+]
+
+# -----------------------------
+# Visualization 1: Rating over time
+# -----------------------------
+st.subheader("📈 Average IMDb Rating Over Time")
+
+ratings_by_year = (
+    df_filtered
+    .groupby("released_year")["imdb_rating"]
+    .mean()
+    .reset_index()
+)
+
+fig_time = px.line(
+    ratings_by_year,
+    x="released_year",
+    y="imdb_rating",
+    labels={
+        "released_year": "Release Year",
+        "imdb_rating": "Average IMDb Rating",
+    },
+    markers=True,
+)
+
+st.plotly_chart(fig_time, width='stretch')
+
+# -----------------------------
+# Visualization 2: Ratings by genre
+# -----------------------------
+st.subheader("🎭 IMDb Rating Distribution by Genre")
+
+fig_genre = px.box(
+    df_filtered,
+    x="main_genre",
+    y="imdb_rating",
+    labels={
+        "main_genre": "Genre",
+        "imdb_rating": "IMDb Rating",
+    },
+)
+
+st.plotly_chart(fig_genre, width='stretch')
+
+# -----------------------------
+# Visualization 3: Runtime vs rating
+# -----------------------------
+st.subheader("⏱️ Runtime vs IMDb Rating")
+
+fig_scatter = px.scatter(
+    df_filtered,
+    x="runtime",
+    y="imdb_rating",
+    color="main_genre",
+    labels={
+        "runtime": "Runtime (minutes)",
+        "imdb_rating": "IMDb Rating",
+    },
+    opacity=0.7,
+)
+
+st.plotly_chart(fig_scatter, width='stretch')
+
+# -----------------------------
+# Insights
+# -----------------------------
+st.subheader("📌 Key Insights")
+
+best_genre = (
+    df_filtered
+    .groupby("main_genre")["imdb_rating"]
+    .mean()
+    .idxmax()
+)
+
+best_decade = (
+    (df_filtered["released_year"] // 10 * 10)
+    .value_counts()
+    .idxmax()
+)
+
+st.markdown(
+    f"""
+- **Best rated genre (on average):** {best_genre}
+- **Decade with most movies in the dataset:** {best_decade}s
+- **Number of movies analysed:** {len(df_filtered)}
+"""
+)
