@@ -62,88 +62,109 @@ df_filtered = df[
 ]
 
 # -----------------------------
+# Tabs
+# -----------------------------
+tab1,tab2,tab3,tab4 = st.tabs([
+    "📈 Rating Over Time", 
+    "🎭 Ratings by Genre", 
+    "⏱️ Runtime vs Rating", 
+    "📌 Insights"
+])
+
+# -----------------------------
 # Visualization 1: Rating over time
 # -----------------------------
-st.subheader("📈 Average IMDb Rating Over Time")
+with tab1:
+    st.subheader("📈 Average IMDb Rating Over Time")
 
-ratings_by_year = (
-    df_filtered
-    .groupby("released_year")["imdb_rating"]
-    .mean()
-    .reset_index()
-)
+    # --- Gráfico original ---
+    ratings_by_year = (
+        df_filtered
+        .groupby("released_year")["imdb_rating"]
+        .mean()
+        .reset_index()
+    )
 
-fig_time = px.line(
-    ratings_by_year,
-    x="released_year",
-    y="imdb_rating",
-    labels={
-        "released_year": "Release Year",
-        "imdb_rating": "Average IMDb Rating",
-    },
-    markers=True,
-)
+    fig_time = px.line(
+        ratings_by_year,
+        x="released_year",
+        y="imdb_rating",
+        labels={
+            "released_year": "Release Year",
+            "imdb_rating": "Average IMDb Rating",
+        },
+        markers=True,
+    )
 
-st.plotly_chart(fig_time, width='stretch')
+    st.plotly_chart(fig_time, width="stretch")
 
 # -----------------------------
 # Visualization 2: Ratings by genre
 # -----------------------------
-st.subheader("🎭 IMDb Rating Distribution by Genre")
+with tab2:
+    st.subheader("🎭 IMDb Rating Distribution by Genre")
 
-fig_genre = px.box(
-    df_filtered,
-    x="main_genre",
-    y="imdb_rating",
-    labels={
-        "main_genre": "Genre",
-        "imdb_rating": "IMDb Rating",
-    },
-)
+    fig_genre = px.box(
+        df_filtered,
+        x="main_genre",
+        y="imdb_rating",
+        labels={
+            "main_genre": "Genre",
+            "imdb_rating": "IMDb Rating",
+        },
+    )
 
-st.plotly_chart(fig_genre, width='stretch')
+    st.plotly_chart(fig_genre, width='stretch')
 
 # -----------------------------
 # Visualization 3: Runtime vs rating
 # -----------------------------
-st.subheader("⏱️ Runtime vs IMDb Rating")
+with tab3:
+    st.subheader("⏱️ Runtime vs IMDb Rating")
 
-fig_scatter = px.scatter(
-    df_filtered,
-    x="runtime",
-    y="imdb_rating",
-    color="main_genre",
-    labels={
-        "runtime": "Runtime (minutes)",
-        "imdb_rating": "IMDb Rating",
-    },
-    opacity=0.7,
-)
+    fig_scatter = px.scatter(
+        df_filtered,
+        x="runtime",
+        y="imdb_rating",
+        color="main_genre",
+        labels={
+            "runtime": "Runtime (minutes)",
+            "imdb_rating": "IMDb Rating",
+        },
+        opacity=0.7,
+    )
 
-st.plotly_chart(fig_scatter, width='stretch')
+    st.plotly_chart(fig_scatter, width='stretch')
 
 # -----------------------------
 # Insights
 # -----------------------------
-st.subheader("📌 Key Insights")
+with tab4:    
+    st.subheader("📌 Key Insights")
 
-best_genre = (
-    df_filtered
-    .groupby("main_genre")["imdb_rating"]
-    .mean()
-    .idxmax()
-)
+    # --- Dropdown de títulos ---
+    movie_titles = sorted(df_filtered["series_title"].unique())
+    selected_title = st.selectbox("Escolhe um filme", movie_titles)
 
-best_decade = (
-    (df_filtered["released_year"] // 10 * 10)
-    .value_counts()
-    .idxmax()
-)
+    # --- Dados do filme escolhido ---
+    movie = df_filtered[df_filtered["series_title"] == selected_title].iloc[0]
 
-st.markdown(
-    f"""
-- **Best rated genre (on average):** {best_genre}
-- **Decade with most movies in the dataset:** {best_decade}s
-- **Number of movies analysed:** {len(df_filtered)}
-"""
-)
+    col1, col2, col3 = st.columns(3)
+
+    # --- Métricas grandes ---
+    col1.metric("IMDb Rating", f"{movie['imdb_rating']:.1f}")
+    col2.metric("Runtime", f"{int(movie['runtime'])} min")
+    col3.metric("Ano", int(movie["released_year"]))
+
+    best_genre = (
+        df_filtered
+        .groupby("main_genre")["imdb_rating"]
+        .mean()
+        .idxmax()
+    )
+
+    best_decade = (
+        (df_filtered["released_year"] // 10 * 10)
+        .value_counts()
+        .idxmax()
+    )
